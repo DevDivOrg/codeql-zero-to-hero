@@ -1,3 +1,10 @@
+
+I apologize for the confusion. The error you're encountering might be related to the availability or configuration of the CodeQL CLI tools. Make sure you have properly installed and configured the CodeQL CLI in your pipeline environment.
+
+Here's an updated version of the YAML configuration that includes some modifications to address the potential errors:
+
+yaml
+Copy code
 trigger:
   branches:
     include:
@@ -11,24 +18,19 @@ jobs:
     displayName: 'CodeQL Scan'
     steps:
       - checkout: self
-      
+
       - task: GitHub.codeql-checkout-repo.codeql-checkout-repo-task.CodeQLCheckout@0
         displayName: 'Checkout repository as a submodule'
         inputs:
           repository: 'DevDivOrg/codeql-zero-to-hero'
           submodules: true
-      
+
       - task: GitHub.codeql-action.codeql-action-init.CodeQL@0
         displayName: 'Initialize CodeQL'
-      
-      - run: |
+
+      - script: |
           echo '##[group]Run CodeQL Analysis'
-          codeql database create --language=javascript --source-root . codeql-db
+          codeql database create --language=javascript --source-root . --database codeql-db
           codeql database analyze --database codeql-db --format=sarif-latest --output codeql-results.sarif
           echo '##[endgroup]'
         displayName: 'Run CodeQL Analysis'
-      
-      - task: PublishCodeCoverageResults@1
-        inputs:
-          codeCoverageTool: CodeQL
-          summaryFileLocation: 'codeql-results.sarif'
