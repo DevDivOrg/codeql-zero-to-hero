@@ -1,49 +1,27 @@
-# This Azure pipelines uses a PowerShell task to run CodeQL on the agent/runner and send results back to GitHub.
-
 trigger:
-  - main
+  branches:
+    include:
+      - main
 
 pool:
   vmImage: 'ubuntu-latest'
 
-jobs: 
-  # Install Node
-  - job: NodeJS
-    displayName: Node JS
-    steps:
-      - task: NodeTool@0
-        inputs:
-          versionSpec: '16.x'
-        displayName: 'Install Node.js'
+steps:
+  - script: |
+      echo '##[group]Install CodeQL CLI'
+      curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql.zip --output codeql.zip
+      unzip -qq codeql.zip -d codeql
+      echo '##[endgroup]'
+    displayName: 'Install CodeQL CLI'
 
-      - script: |
-          cd $(System.DefaultWorkingDirectory)
-          npm install
-        displayName: 'npm install and test'
+  - script: |
+      echo '##[group]Analyze CodeQL database'
+      ./codeql/codeql database create --language=javascript --source-root . codeql-db
+      ./codeql/codeql query run --database codeql-db --output results.sarif
+      echo '##[endgroup]'
+    displayName: 'Analyze CodeQL'
 
-  # Run CodeQL
-  - job: CodeQL_CLI 
-    displayName: CodeQL Scan
-    dependsOn: NodeJS
-    steps:
-      - checkout: self
-
-      # Use PowerShell to checkout CodeQL Anywhere repo as a submodule
-      - task: PowerShell@2
-        displayName: 'Checkout codeql-anywhere'
-        inputs:
-          targetType: inline
-          script: |
-            if (Test-Path './.git/modules/codeql-anywhere') {rm -rf './.git/modules/codeql-anywhere'}
-            git submodule add https://github.com/david-wiggs/codeql-anywhere.git
-          pwsh: true
-
-      # Use PowerShell to run the CodeQL scan and return SARIF results to GitHub
-      - task: PowerShell@2
-        displayName: 'Run New-CodeQLScan.ps1'
-        inputs:
-          targetType: filePath
-          filePath: 'codeql-anywhere/resources/scripts/New-CodeQLScan.ps1'
-          pwsh: true
-        env:
-          GITHUB_TOKEN: $(GHAS_ADO)
+  - task: PublishCodeCoverageResults@1
+    inputs:
+      codeCoverageTool: CodeQL
+      summaryFileLocation: results.sarif
