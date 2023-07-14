@@ -12,14 +12,12 @@ jobs:
     steps:
       - checkout: self
 
-      - task: GitHub.codeql-checkout-repo.codeql-checkout-repo-task.CodeQLCheckout@0
-        displayName: 'Checkout repository as a submodule'
-        inputs:
-          repository: 'DevDivOrg/codeql-zero-to-hero'
-          submodules: true
-
-      - task: GitHub.codeql-action.codeql-action-init.CodeQL@0
-        displayName: 'Initialize CodeQL'
+      - script: |
+          echo '##[group]Install CodeQL CLI'
+          curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip -o codeql-linux64.zip
+          unzip -qq codeql-linux64.zip
+          export PATH=$PATH:$(pwd)/codeql-linux64/bin
+          echo '##[endgroup]'
 
       - script: |
           echo '##[group]Run CodeQL Analysis'
