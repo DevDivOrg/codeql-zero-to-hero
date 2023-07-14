@@ -22,7 +22,7 @@ jobs:
         displayName: 'npm install and test'
 
       - script: |
-          wget https://github.com/github/codeql-action/releases/latest/download/codeql-runner-linux
+          wget https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.14.0/codeql-runner-linux
           chmod +x codeql-runner-linux
         displayName: 'Get latest CodeQL package. Install on Agent.'
 
