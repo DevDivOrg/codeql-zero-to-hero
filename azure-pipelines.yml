@@ -23,7 +23,7 @@ jobs:
           echo '##[group]Run CodeQL Analysis'
           codeql database create --language=python --source-root . --database codeql-db
           codeql database index --database codeql-db
-          codeql query run --database codeql-db --format=sarif-latest --output codeql-results.sarif $(pwd)/codeql-bundle-*/codeql-suites/security-extended/ql/src
+          codeql query run --database codeql-db --format=sarif-latest --output codeql-results.sarif $(pwd)/codeql-bundle-*/codeql-suites/python/ql/src
           echo '##[endgroup]'
         displayName: 'Run CodeQL Analysis'
 
