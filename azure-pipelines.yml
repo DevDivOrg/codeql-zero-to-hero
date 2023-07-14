@@ -6,22 +6,29 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-steps:
-  - script: |
-      echo '##[group]Install CodeQL CLI'
-      curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql.zip --output codeql.zip
-      unzip -qq codeql.zip -d codeql
-      echo '##[endgroup]'
-    displayName: 'Install CodeQL CLI'
-
-  - script: |
-      echo '##[group]Analyze CodeQL database'
-      ./codeql/codeql database create --language=javascript --source-root . codeql-db
-      ./codeql/codeql query run --database codeql-db --output results.sarif
-      echo '##[endgroup]'
-    displayName: 'Analyze CodeQL'
-
-  - task: PublishCodeCoverageResults@1
-    inputs:
-      codeCoverageTool: CodeQL
-      summaryFileLocation: results.sarif
+jobs:
+  - job: CodeQLScan
+    displayName: 'CodeQL Scan'
+    steps:
+      - checkout: self
+      
+      - task: GitHub.codeql-checkout-repo.codeql-checkout-repo-task.CodeQLCheckout@0
+        displayName: 'Checkout repository as a submodule'
+        inputs:
+          repository: 'DevDivOrg/codeql-zero-to-hero'
+          submodules: true
+      
+      - task: GitHub.codeql-action.codeql-action-init.CodeQL@0
+        displayName: 'Initialize CodeQL'
+      
+      - run: |
+          echo '##[group]Run CodeQL Analysis'
+          codeql database create --language=javascript --source-root . codeql-db
+          codeql database analyze --database codeql-db --format=sarif-latest --output codeql-results.sarif
+          echo '##[endgroup]'
+        displayName: 'Run CodeQL Analysis'
+      
+      - task: PublishCodeCoverageResults@1
+        inputs:
+          codeCoverageTool: CodeQL
+          summaryFileLocation: 'codeql-results.sarif'
