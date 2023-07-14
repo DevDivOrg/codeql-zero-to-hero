@@ -1,39 +1,35 @@
+# This Azure pipelines uses a PowerShell task to run CodeQL on the agent/runner and send results back to GitHub.
+
 trigger:
-  branches:
-    include:
-      - main
+  - main
 
 pool:
   vmImage: 'ubuntu-latest'
 
 jobs:
-  - job: CodeQLScan
-    displayName: 'CodeQL Scan'
+  # install Node
+  - job: NodeJS
+    displayName: Node JS
     steps:
-      - checkout: self
+      - task: NodeTool@0
+        inputs:
+          versionSource: 'spec' # 'spec' | 'fromFile'. Required. Source of version. Default: spec.
+          versionSpec: '16.x'
+        displayName: 'Install Node.js'
 
       - script: |
-          echo '##[group]Install CodeQL CLI'
-          curl -L -o codeql-bundle.zip https://github.com/github/codeql-bundle/releases/latest/download/codeql-bundle.zip
-          unzip -qq codeql-bundle.zip
-          export PATH=$PATH:$(pwd)/codeql-bundle-*/codeql-cli/bin
-          echo '##[endgroup]'
+          npm install
+        displayName: 'npm install and test'
 
       - script: |
-          echo '##[group]Run CodeQL Analysis'
-          codeql database create --language=python --source-root . --database codeql-db
-          codeql database index --database codeql-db
-          codeql query run --database codeql-db --format=sarif-latest --output codeql-results.sarif $(pwd)/codeql-bundle-*/codeql-suites/python/ql/src
-          echo '##[endgroup]'
-        displayName: 'Run CodeQL Analysis'
+          wget https://github.com/github/codeql-action/releases/latest/download/codeql-runner-linux
+          chmod +x codeql-runner-linux
+        displayName: 'Get latest CodeQL package. Install on Agent.'
 
       - script: |
-          echo '##[group]List Files in Current Directory'
-          ls -al
-          echo '##[endgroup]'
-
-      - script: |
-          echo '##[group]Print CodeQL Analysis Results'
-          cat $(pwd)/codeql-results.sarif
-          echo '##[endgroup]'
-        displayName: 'Print CodeQL Analysis Results'
+          ./codeql-runner-linux init \
+          --repository DevDivOrg/codeql-zero-to-hero/security \
+          --github-url https://github.com \
+          --github-auth $GHAS_ADO \
+          --config-file .github/codeql/codeql-config.yml 
+        displayName: 'Initialize CodeQL Executable and create a CodeQL database'
