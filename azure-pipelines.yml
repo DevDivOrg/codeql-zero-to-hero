@@ -1,10 +1,3 @@
-
-I apologize for the confusion. The error you're encountering might be related to the availability or configuration of the CodeQL CLI tools. Make sure you have properly installed and configured the CodeQL CLI in your pipeline environment.
-
-Here's an updated version of the YAML configuration that includes some modifications to address the potential errors:
-
-yaml
-Copy code
 trigger:
   branches:
     include:
