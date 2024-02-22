@@ -1,0 +1,346 @@
+appinsights
+main
+
+resource "azurerm_application_insights" "appinsights" {
+  # Variable must be globally unique 
+  name                = var.name
+  resource_group_name = var.resource_group
+  location            = var.location
+  application_type    = var.application_type
+  retention_in_days   = var.retention_in_days
+  workspace_id        = var.workspace_id
+}
+
+
+output
+
+output "name" {
+  value = azurerm_application_insights.appinsights.name
+}
+
+output "app_id" {
+  value = azurerm_application_insights.appinsights.app_id
+}
+
+output "id" {
+  value = azurerm_application_insights.appinsights.id
+}
+
+# There is only one nested identity block in the APIM so we can safely index 0
+output "instrumentation_key" {
+  value = azurerm_application_insights.appinsights.instrumentation_key
+}
+
+output "connection_string" {
+  value = azurerm_application_insights.appinsights.connection_string
+}
+
+var
+
+variable "name" {
+  type = string
+}
+
+variable "resource_group" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "application_type" {
+  type    = string
+  default = "web"
+}
+
+variable "workspace_id" {
+  type = string
+}
+
+variable "retention_in_days" {
+  type    = number
+  default = 30
+}
+
+
+app insight 
+
+main
+
+resource "azurerm_monitor_action_group" "critical_alerts" {
+  name                = "Critical Alerts - ${var.name}"
+  resource_group_name = var.resource_group
+  short_name          = "p0action"
+
+  dynamic "email_receiver" {
+    for_each = var.oncall_persons
+    content {
+      name                    = email_receiver.value.name
+      email_address           = email_receiver.value.email
+      use_common_alert_schema = true
+    }
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert" "exceptions" {
+  name                = "Exceptions - ${var.name}"
+  location            = var.location
+  resource_group_name = var.resource_group
+
+  action {
+    action_group = [
+      azurerm_monitor_action_group.critical_alerts.id
+    ]
+  }
+  data_source_id = var.app_insights_id
+  description    = "An exception has occurred in ${var.app_name}, please investigate."
+  enabled        = true
+  # Count all requests with server error result code grouped into 5-minute bins
+  query       = <<-QUERY
+  union isfuzzy=true exceptions
+  QUERY
+  severity    = lower(var.environment) == "prd" ? 1 : 3
+  frequency   = 5
+  time_window = 5
+  trigger {
+    operator  = "GreaterThan"
+    threshold = 0
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert" "key_events" {
+  name                = "Key Events - ${var.name}"
+  location            = var.location
+  resource_group_name = var.resource_group
+
+  action {
+    action_group = [
+      azurerm_monitor_action_group.critical_alerts.id
+    ]
+  }
+  data_source_id = var.app_insights_id
+  description    = "Attached are the key events in ${var.name}"
+  enabled        = true
+  # Count all requests with server error result code grouped into 5-minute bins
+  query       = <<-QUERY
+  union isfuzzy=true customEvents
+  | where name in (
+      "SAPWorkOrderUpdateFailure", 
+      "SAP WorkOrder Update Reprocessed Maximum Number of Times", 
+      "Submit Schedule",
+      "Scheduled Job BigQueryWorkOrderTechnicianSyncJob Failed.",
+      "Scheduled Job PreCapacitySubmissionEmailJob Failed.",
+      "Scheduled Job BigQueryStatusSyncJob Failed.",
+      "Scheduled Job BigQueryWorkOrderSupervisorSyncJob Failed.",
+      "Scheduled Job BigQueryWorkOrderSyncJob Failed.",
+      "Scheduled Job BigQueryWorkOrderTechnicianSyncJob Failed.",
+      "Scheduled Job BigQueryUserSyncJob Failed.",
+      "Scheduled Job ScheduledJobUpdaterJob Failed.",
+      "Scheduled Job WorkOrderPrioritizationDueEmailJob Failed."
+      )
+  QUERY
+  severity    = 2
+  frequency   = 5
+  time_window = 5
+  trigger {
+    operator  = "GreaterThan"
+    threshold = 0
+  }
+}
+
+resource "azurerm_monitor_smart_detector_alert_rule" "failure_anomalies_detector" {
+  name                = "Anomalies Detector - ${var.name}"
+  resource_group_name = var.resource_group
+  description         = "availability test of ${var.name}"
+  severity            = lower(var.environment) == "prd" ? "Sev1" : "Sev2"
+  scope_resource_ids  = [var.app_insights_id]
+  frequency           = "PT1M"
+  detector_type       = "FailureAnomaliesDetector"
+
+  action_group {
+    ids = [azurerm_monitor_action_group.critical_alerts.id]
+  }
+}
+resource "azurerm_monitor_smart_detector_alert_rule" "request_performance_degradation_detector" {
+  name                = "Request Performance Degradation Detector - ${var.name}"
+  resource_group_name = var.resource_group
+  description         = "Request Performance Degradation Detector ${var.name}"
+  severity            = lower(var.environment) == "prd" ? "Sev1" : "Sev3"
+  scope_resource_ids  = [var.app_insights_id]
+  frequency           = "P1D"
+  detector_type       = "RequestPerformanceDegradationDetector"
+
+  action_group {
+    ids = [azurerm_monitor_action_group.critical_alerts.id]
+  }
+}
+resource "azurerm_monitor_smart_detector_alert_rule" "dependency_performance_degradation_detector" {
+  name                = "Dependency Performance Degradation Detector - ${var.name}"
+  resource_group_name = var.resource_group
+  description         = "Dependency Performance Degradation Detector of ${var.name}"
+  severity            = lower(var.environment) == "prd" ? "Sev1" : "Sev3"
+  scope_resource_ids  = [var.app_insights_id]
+  frequency           = "P1D"
+  detector_type       = "DependencyPerformanceDegradationDetector"
+
+  action_group {
+    ids = [azurerm_monitor_action_group.critical_alerts.id]
+  }
+}
+resource "azurerm_monitor_smart_detector_alert_rule" "memory_leak_detector" {
+  name                = "Memory Leak Detector - ${var.name}"
+  resource_group_name = var.resource_group
+  description         = "Memory Leak Detector of ${var.name}"
+  severity            = lower(var.environment) == "prd" ? "Sev1" : "Sev3"
+  scope_resource_ids  = [var.app_insights_id]
+  frequency           = "P1D"
+  detector_type       = "MemoryLeakDetector"
+
+  action_group {
+    ids = [azurerm_monitor_action_group.critical_alerts.id]
+  }
+}
+# resource "azapi_update_resource" "application_insights_migrate_to_alerts" {
+#   type      = "Microsoft.Insights/components/ProactiveDetectionConfigs@2018-05-01-preview"
+#   name      = "migrationToAlertRulesCompleted"
+#   parent_id = var.app_insights_id
+
+#   body = jsonencode({
+#     properties = {
+#       Name                           = "migrationToAlertRulesCompleted"
+#       SendEmailsToSubscriptionOwners = false
+#       Enabled                        = true
+#       CustomEmails                   = []
+#     }
+#   })
+
+#   depends_on = [
+#     azurerm_monitor_smart_detector_alert_rule.request_performance_degradation_detector
+#   ]
+# }
+resource "azurerm_application_insights_web_test" "availability_test_backend" {
+  name                    = "Appinsights Availability Test Backend- ${var.name}"
+  location                = var.location
+  resource_group_name     = var.resource_group
+  application_insights_id = var.app_insights_id
+  kind                    = "ping"
+  frequency               = 300
+  timeout                 = 60
+  enabled                 = true
+  geo_locations           = ["us-fl-mia-edge", "latam-br-gru-edge", "us-va-ash-azr", "emea-fr-pra-edge", "apac-sg-sin-azr", "emea-au-syd-edge"] #https://learn.microsoft.com/EN-us/azure/azure-monitor/app/availability-standard-tests
+
+  configuration = <<XML
+<WebTest Name="Availability Test ${var.name}" Id="ABD48585-0831-40CB-9069-682EA6BB3583" Enabled="True" CssProjectStructure="" CssIteration="" Timeout="0" WorkItemIds="" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010" Description="" CredentialUserName="" CredentialPassword="" PreAuthenticate="True" Proxy="default" StopOnError="False" RecordedResultFile="" ResultsLocale="">
+  <Items>
+    <Request Method="GET" Version="1.1" Url="https://${var.backend_app_url}" ThinkTime="0" Timeout="300" ParseDependentRequests="True" FollowRedirects="True" RecordResult="True" Cache="False" ResponseTimeGoal="0" Encoding="utf-8" ExpectedHttpStatusCode="200" ExpectedResponseUrl="" ReportingName="" IgnoreHttpStatusCode="False" />
+  </Items>
+</WebTest>
+XML
+  lifecycle {
+    ignore_changes = [
+      tags
+    ]
+  }
+}
+
+
+resource "azurerm_monitor_metric_alert" "availability" {
+  name                = "Availabilty Check - ${var.name}"
+  resource_group_name = var.resource_group
+  scopes              = [var.app_insights_id, azurerm_application_insights_web_test.availability_test_backend.id]
+  description         = "Availabilty Check - ${var.name}"
+  frequency           = "PT1M"
+  auto_mitigate       = true
+  severity            = lower(var.environment) == "prd" ? 1 : 3 #The severity of this Metric Alert. Possible values are 0, 1, 2, 3 and 4. Defaults to 3.
+  application_insights_web_test_location_availability_criteria {
+    web_test_id           = azurerm_application_insights_web_test.availability_test_backend.id
+    component_id          = var.app_insights_id
+    failed_location_count = 2
+  }
+  action {
+    action_group_id = azurerm_monitor_action_group.critical_alerts.id
+  }
+}
+
+
+var
+
+variable "name" {
+  type    = string
+  default = ""
+}
+
+variable "resource_group" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "app_insights_id" {
+  type    = string
+  default = ""
+}
+
+variable "app_name" {
+  type    = string
+  default = "foobar"
+}
+
+variable "backend_app_url" {
+  type    = string
+  default = "https://example.com"
+}
+
+variable "oncall_persons" {
+  type    = list(any)
+  default = []
+}
+
+app insight workspace
+
+output
+
+output "name" {
+  value = azurerm_log_analytics_workspace.log_analytics_workspace.name
+}
+
+output "workspace_id" {
+  value = azurerm_log_analytics_workspace.log_analytics_workspace.id
+}
+
+var
+
+variable "name" {
+  type = string
+}
+
+variable "resource_group" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "sku_name" {
+  type    = string
+  default = "PerGB2018"
+}
+
+variable "retention_in_days" {
+  type    = number
+  default = 30
+}
+
+
+
+

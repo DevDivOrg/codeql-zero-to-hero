@@ -1,0 +1,61 @@
+ACR
+Main
+
+resource "azurerm_container_registry" "acr" {
+  # The name needs to be globally unique and only alphanumeric characters are allowed.
+  name                = lower(replace(var.name, "/[^a-zA-Z0-9]/", ""))
+  resource_group_name = var.resource_group
+  location            = var.location
+  sku                 = "Standard"
+  admin_enabled       = true
+  tags                = var.tags
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+output
+
+output "login_server" {
+  value = azurerm_container_registry.acr.login_server
+}
+
+output "name" {
+  value = azurerm_container_registry.acr.name
+}
+
+output "admin_username" {
+  value = azurerm_container_registry.acr.admin_username
+}
+
+output "admin_password" {
+  value     = azurerm_container_registry.acr.admin_password
+  sensitive = true
+}
+
+
+variable
+
+variable "name" {
+  type = string
+}
+
+variable "resource_group" {
+  type = string
+}
+
+variable "location" {
+  type = string
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+
+
+
+
+
+
+
